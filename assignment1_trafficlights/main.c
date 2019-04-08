@@ -69,7 +69,8 @@ void basicLight(void) //Task 1 done naively
 	
 }
 
-void basicLight2(void){ //Task 1 done with a timer and loops
+void basicLight2(void) //Task 1 done with a timer and loops
+{
 	
 	//Initialise  registers as output
 	DDRB |= (1<<GREEN) | (1<<YELLOW) | (1<<RED);
