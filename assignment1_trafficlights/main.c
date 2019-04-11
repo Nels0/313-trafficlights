@@ -4,10 +4,9 @@
  * Created: 2/04/2019 12:14:12 PM
  * Author : ncoo162
  */ 
+#define F_CPU 1000000
 
 #include <avr/io.h>
-
-#define F_CPU 1000000
 #include <util/delay.h>
 
 
@@ -15,14 +14,19 @@
 void basicLight(void);
 void basicLight2(void);
 
-typedef enum {
+void cameraCheck(void);
+void speedCheck(void);
+void lightUpdate(void);
+
+
+typedef enum { //light colour aliases
 	GREEN = PB2,
 	YELLOW = PB1,
 	RED = PB0
 	} lightColour;
 
 
-lightColour nextLight(lightColour lightIn){
+lightColour nextLight(lightColour lightIn){ //helper function to cycle through lights in the right order
 	switch(lightIn) {
 		case GREEN	:	return YELLOW;
 		case YELLOW :	return RED;
@@ -32,20 +36,102 @@ lightColour nextLight(lightColour lightIn){
 }
 
 //Global current light color
-lightColour currentLight = RED;
+lightColour currentLight = RED; //LEDs should always be updated when this is changed. Should always be accurate
 
+//Whether traffic light system is in configuration mode
+int isConfiguring = 0; // for lightUpdate
 
-
+//1ms timer interrupt
+/*
+void timer() 
+{
+	time +=1;
+	
+	//Check switches
+	if a bumper switch is pressed{
+		// <1.5ms response time key
+		record timestamp
+		set output pin high as proof on oscilloscope
+	}
+	if red light switch pressed
+	{
+		set switch boolean
+	}
+	if config switch pressed 
+	{
+		set boolean
+	}
+	
+	
+		
+}
+*/
 
 int main(void)
 {
 	
 	basicLight2();
 	
-    while (1) 
+    while (1) //Loop time needs to be under 10ms for red light camera
     {
+		// Camera check comes before lightUpdate so that it if a car drives through on the same tick as the light changes from red, it will read what the light was when it was triggered
+		
+		
+		//cameraCheck
+		//speedCheck
+		//lightUpdate 
+		
+
+
     }
 }
+
+
+void cameraCheck(void)
+{
+	//check whether red light has been triggered 
+	
+	//check current traffic light colour
+	
+	//record results
+	//	set PWM and set light to flash
+	
+	//set light state as necessary using timestamp for flashes
+}
+
+void speedCheck(void)
+{
+	//compare timestamps
+	//if both are non-zero (assume that switch can't be hit within <1ms of system boot)
+	//	calculate speed
+	//	record speed
+	//	output speed to PWM
+	//	set timestamps back to zero when finished
+	
+}
+
+void lightUpdate(void)
+{
+	//TODO: check if config switch pressed and handle that
+	
+	//check config mode
+	//if not config
+	//	check timestamps and cycle light
+	//if config
+	//	read ADC
+	//	update light flash state
+	
+}
+
+
+/* Variables:
+ - Button states
+ - Light period
+ - Bumper timestamps
+ - red light flash time/state
+ - Redlight car count for PWM
+ - last car speed for PWM
+ */
 
 void basicLight(void) //Task 1 done naively
 {
