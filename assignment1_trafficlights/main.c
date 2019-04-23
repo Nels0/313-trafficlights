@@ -12,7 +12,7 @@
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
-#define PRESCALE 0
+#define PRESCALE 8
 
 //Function Declarations
 void basicLight(void);
@@ -66,7 +66,10 @@ void buttonUpdate(void){
 
 }
 
-//TODO: function to convert tickrate to timestamp
+int tickToMS(int currentTick) {
+    float ratio = 256.0 * (float)PRESCALE / (float)F_CPU;
+    return (int)((float)currentTick * ratio);
+}
 
 //1ms timer interrupt
 /*
@@ -105,7 +108,7 @@ int main(void)
 
 	
 	TCCR0 = 0;
-	TCCR0 |= (1 << CS00); // Set prescaler for timer0 to 0, overflow of 256/1,000,000 = 0.256ms, or every 256 cycles
+	TCCR0 |= (1 << CS01); // Set prescaler for timer0 to 8, overflow of 8*256/1,000,000 = 2.048ms, or every 256 cycles
 	TIMSK |= (1 << TOIE0); //Enable overflow interrupt
 	
 	sei();
