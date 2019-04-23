@@ -11,6 +11,7 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
+#define PRESCALE 0
 
 //Function Declarations
 void basicLight(void);
@@ -50,6 +51,8 @@ bool LB1 = false;
 bool LB2 = false;
 bool LB3 = false;
 
+uint32_t currentTick = 0;
+
 void buttonUpdate(void){
 	
 	//Switches are all connected to portD, respectively
@@ -62,6 +65,8 @@ void buttonUpdate(void){
 	
 	return;
 }
+
+//TODO: function to convert tickrate to timestamp
 
 //1ms timer interrupt
 /*
@@ -91,6 +96,7 @@ void timer()
 
 ISR(TIMER0_OVF_vect){
 	buttonUpdate();
+    currentTick += 1;
 }
 
 int main(void)
@@ -102,16 +108,16 @@ int main(void)
 	TCCR0 |= (1 << CS00); // Set prescaler for timer0 to 0, overflow of 256/1,000,000 = 0.256ms, or every 256 cycles
 	TIMSK |= (1 << TOIE0); //Enable overflow interrupt
 	
-	sei();
+	//sei();
 	
     while (1) //Loop time needs to be under 10ms for red light camera
     {
 		// Camera check comes before lightUpdate so that it if a car drives through on the same tick as the light changes from red, it will read what the light was when it was triggered
 		
 		
-		//cameraCheck
-		//speedCheck
-		//lightUpdate 
+		//cameraCheck();
+		//speedCheck();
+		//lightUpdate();
 		
 
 
