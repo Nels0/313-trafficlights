@@ -4,8 +4,10 @@
  * Created: 2/04/2019 12:14:12 PM
  * Author : ncoo162
  */ 
+
 #define F_CPU 1000000
 
+#include <stdbool.h>
 #include <avr/io.h>
 #include <util/delay.h>
 
@@ -13,6 +15,8 @@
 //Function Declarations
 void basicLight(void);
 void basicLight2(void);
+
+void buttonUpdate(void);
 
 void cameraCheck(void);
 void speedCheck(void);
@@ -39,7 +43,25 @@ lightColour nextLight(lightColour lightIn){ //helper function to cycle through l
 lightColour currentLight = RED; //LEDs should always be updated when this is changed. Should always be accurate
 
 //Whether traffic light system is in configuration mode
-int isConfiguring = 0; // for lightUpdate
+bool isConfiguring = false; // for lightUpdate
+
+bool SW0 = false;
+bool LB1 = false;
+bool LB2 = false;
+bool LB3 = false;
+
+void buttonUpdate(void){
+	
+	//Switches are all connected to portD, respectively
+	SW0 |= (PORTD & (1<<PD0)) >> PD0;
+	
+	//LB1, 2, 3 represent SW5, 6, 7 respectively
+	LB1 |= (PORTD & (1<<PD5)) >> PD5;
+	LB2 |= (PORTD & (1<<PD6)) >> PD6;
+	LB3 |= (PORTD & (1<<PD7)) >> PD7;
+	
+	return;
+}
 
 //1ms timer interrupt
 /*
@@ -67,10 +89,20 @@ void timer()
 }
 */
 
+ISR(TIMER0_OVF_vect){
+	buttonUpdate();
+}
+
 int main(void)
 {
 	
-	basicLight2();
+
+	
+	TCCR0 = 0;
+	TCCR0 |= (1 << CS00); // Set prescaler for timer0 to 0, overflow of 256/1,000,000 = 0.256ms, or every 256 cycles
+	TIMSK |= (1 << TOIE0); //Enable overflow interrupt
+	
+	sei();
 	
     while (1) //Loop time needs to be under 10ms for red light camera
     {
@@ -178,7 +210,7 @@ void basicLight2(void) //Task 1 done with a timer and loops
 	//TCCR1B should = 0000011
 	TCCR1B = cTCCR1B;
 	
-	int s_tcnt = 1000000/64; //Number of ticks in a second
+	int s_tcnt = F_CPU/64; //Number of ticks in a second
 	
 	while(1){
 		if(TCNT1 > s_tcnt){ //every second
