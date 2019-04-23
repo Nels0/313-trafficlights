@@ -9,6 +9,7 @@
 
 #include <stdbool.h>
 #include <avr/io.h>
+#include <avr/interrupt.h>
 #include <util/delay.h>
 
 #define PRESCALE 0
@@ -62,8 +63,7 @@ void buttonUpdate(void){
 	LB1 |= (PORTD & (1<<PD5)) >> PD5;
 	LB2 |= (PORTD & (1<<PD6)) >> PD6;
 	LB3 |= (PORTD & (1<<PD7)) >> PD7;
-	
-	return;
+
 }
 
 //TODO: function to convert tickrate to timestamp
@@ -108,7 +108,7 @@ int main(void)
 	TCCR0 |= (1 << CS00); // Set prescaler for timer0 to 0, overflow of 256/1,000,000 = 0.256ms, or every 256 cycles
 	TIMSK |= (1 << TOIE0); //Enable overflow interrupt
 	
-	//sei();
+	sei();
 	
     while (1) //Loop time needs to be under 10ms for red light camera
     {
