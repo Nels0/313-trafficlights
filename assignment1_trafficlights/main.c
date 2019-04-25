@@ -66,6 +66,8 @@ int tickToMS(int currentTick) {
 lightColour currentLight = RED; // LEDs should always be updated when this is
                                 // changed. Should always be accurate
 
+int redLightCount = 0;
+
 // Whether traffic light system is in configuration mode
 bool isConfiguring = false; // for lightUpdate
 
@@ -98,6 +100,14 @@ int main(void) {
   DDRB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
   // Set outputs to 1 (off)
   PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
+
+  // Timer1 PWM Setup
+  TCCR1A |= (1 << COM1A1) | (0 << COM1A0); // non-inverting mode
+  TCCR1A |= (1 << WGM11) | (1 << WGM10);   // Fast PWM 10-bit mode
+  TCCR1B |= (1 << WGM12);                  // Fast PWM 10-bit mode
+  TCCR1B |=
+      (1 << CS11) |
+      (1 << CS10); // Prescale of 64 (PWM period of 1024*64/1000000 = 65.536ms)
 
   while (1) // Loop time needs to be under 10ms for red light camera
   {
@@ -139,13 +149,28 @@ void buttonUpdate(void) {
 
 void cameraCheck(void) {
   // check whether red light has been triggered
+  if (LB3) {
+    LB3 = false;
+    // check current traffic light colour
+    if (currentLight != RED) {
+      return;
+    } else {
+      // record results
+      redLightCount += 1;
+      // flash light twice
+    }
+  }
 
-  // check current traffic light colour
+  // Set PWM
 
-  // record results
-  //	set PWM and set light to flash
+  // Disable interrupts for 16-bit write
+  cli();
+  // Set TCNT1 for PWM compare mode
+  TCNT1 = (uint16_t)(redLightCount * 1024 / 100);
+  // Re-enable interrupts
+  sei();
 
-  // set light state as necessary using timestamp for flashes
+  
 }
 
 void speedCheck(void) {
@@ -172,7 +197,8 @@ int lightUpdate(int lastUpdateTick) { // Updates the traffic light, and
     if (SW0) { // Exit config mode on next background cycle
       isConfiguring = false;
       SW0 = false;
-      ADCSRA &= ~(1 << ADFR); // Stop ADC free running mode thus stop conversions
+      ADCSRA &=
+          ~(1 << ADFR); // Stop ADC free running mode thus stop conversions
     }
 
     // Read ADC
