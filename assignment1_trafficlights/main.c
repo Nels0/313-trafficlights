@@ -22,7 +22,7 @@ void buttonUpdate(void);
 
 void cameraCheck(void);
 void speedCheck(void);
-int lightUpdate(int lastUpdateTick);
+void lightUpdate(void);
 
 typedef enum // light colour aliases
 { GREEN = PB2,
@@ -71,7 +71,8 @@ int redLightCount = 0;
 // Whether traffic light system is in configuration mode
 bool isConfiguring = false; // for lightUpdate
 
-int lightPeriod = 1; // light period in s
+int lightPeriod = 1;         // light period in s
+int lastLightUpdateTick = 0; // Last time trafic lights changed colour
 
 // Switch states
 bool SW0 = false;
@@ -95,7 +96,6 @@ int main(void) {
   ADMUX = 0;                             // internal ref, ADC0 input
   ADCSRA |= (1 << ADPS1) | (1 << ADPS0); // ADC input clock division factor of 8
 
-  int lastLightChangeTick = 0;
   // Initialise  registers as output
   DDRB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
   // Set outputs to 1 (off)
@@ -115,9 +115,9 @@ int main(void) {
     // on the same tick as the light changes from red, it will read what the
     // light was when it was triggered
 
-    // cameraCheck();
-    // speedCheck();
-    lastLightChangeTick = lightUpdate(lastLightChangeTick);
+    cameraCheck();
+    speedCheck();
+    lightUpdate();
   }
 }
 
@@ -157,7 +157,7 @@ void cameraCheck(void) {
     } else {
       // record results
       redLightCount += 1;
-      // flash light twice
+      // TODO: flash light twice
     }
   }
 
@@ -169,8 +169,6 @@ void cameraCheck(void) {
   TCNT1 = (uint16_t)(redLightCount * 1024 / 100);
   // Re-enable interrupts
   sei();
-
-  
 }
 
 void speedCheck(void) {
@@ -180,10 +178,8 @@ void speedCheck(void) {
   // set timestamps back to zero when finished
 }
 
-// Currently undecided whether this should pass by reference, as a copy, or be
-// global
-int lightUpdate(int lastUpdateTick) { // Updates the traffic light, and
-                                      // configuration of them
+void lightUpdate(void) { // Updates the traffic light, and
+                         // configuration of them
 
   if (SW0 && !isConfiguring) { // Enter config mode on next background cycle &
                                // red light
@@ -213,12 +209,11 @@ int lightUpdate(int lastUpdateTick) { // Updates the traffic light, and
 
     // TODO: Do light flash
 
-  } else if (tickToMS(currentTick - lastUpdateTick) >= lightPeriod) {
+  } else if (tickToMS(currentTick - lastLightUpdateTick) >= lightPeriod) {
     // if it's time to change the light
     PORTB |= (1 << currentLight);           // Turn current light off
     currentLight = nextLight(currentLight); // Move to next light colour
     PORTB &= ~(1 << currentLight);          // Turn current light on
-    return currentTick;
+    lastLightUpdateTick = tickToMS(currentTick - lastLightUpdateTick);
   }
-  return lastUpdateTick;
 }
