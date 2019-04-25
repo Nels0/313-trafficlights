@@ -161,14 +161,14 @@ void cameraCheck(void) {
     }
   }
 
-  // Set PWM
 
-  // Disable interrupts for 16-bit write
-  cli();
+  // No need to disable interrupts for 16-bit write as interrupts won't access temp high reg
+  // maybe
+  // Disabling interrupts could make tick count inaccurate
+  
   // Set TCNT1 for PWM compare mode
   TCNT1 = (uint16_t)(redLightCount * 1024 / 100);
-  // Re-enable interrupts
-  sei();
+
 }
 
 void speedCheck(void) {
