@@ -69,7 +69,7 @@ lightColour currentLight = RED; // LEDs should always be updated when this is
 // Whether traffic light system is in configuration mode
 bool isConfiguring = false; // for lightUpdate
 
-int lightPeriod = 1000; // light period in ms
+int lightPeriod = 1; // light period in s
 
 // Switch states
 bool SW0 = false;
@@ -84,10 +84,14 @@ int main(void) {
 
   TCCR0 = 0;
   TCCR0 |= (1 << CS01);  // Set prescaler for timer0 to 8, overflow of
-                         // 8*256/1,000,000 = 2.048ms, or every 256 cycles
+                         // 8*256/1,000,000 = 2.048ms, or every 2048 cycles
   TIMSK |= (1 << TOIE0); // Enable overflow interrupt
 
   sei();
+
+  // ADC Setup
+  ADMUX = 0;                             // internal ref, ADC0 input
+  ADCSRA |= (1 << ADPS1) | (1 << ADPS0); // ADC input clock division factor of 8
 
   int lastLightChangeTick = 0;
   // Initialise  registers as output
@@ -147,34 +151,45 @@ void cameraCheck(void) {
 void speedCheck(void) {
   // compare timestamps
   // if both are non-zero (assume that switch can't be hit within <1ms of system
-  // boot) 	calculate speed 	record speed 	output speed to PWM 	set
-  // timestamps back
-  // to zero when finished
+  // boot) 	calculate speed 	record speed 	output speed to PWM
+  // set timestamps back to zero when finished
 }
 
-int lightUpdate(int lastUpdateTick) {
-  // TODO: check if config switch pressed and handle that
+// Currently undecided whether this should pass by reference, as a copy, or be
+// global
+int lightUpdate(int lastUpdateTick) { // Updates the traffic light, and
+                                      // configuration of them
 
-  // check config mode
-  // if not config
-  //	check timestamps and cycle light
-  // if config
-  //	read ADC
-  //	update light flash state
-
-  if (SW0 && !isConfiguring) {
+  if (SW0 && !isConfiguring) { // Enter config mode on next background cycle &
+                               // red light
     isConfiguring = true;
     SW0 = false;
+    ADCSRA |= (1 << ADFR) |
+              (1 << ADSC); // Set ADC to free running and start conversions
   }
 
   if (isConfiguring && currentLight == RED) {
-    if (SW0) {
+    if (SW0) { // Exit config mode on next background cycle
       isConfiguring = false;
       SW0 = false;
+      ADCSRA &= ~(1 << ADFR); // Stop ADC free running mode thus stop conversions
     }
-  } else if (tickToMS(currentTick - lastUpdateTick) >=
-             lightPeriod) {       // check if it's time to change the light
-    PORTB |= (1 << currentLight); // Turn current light off
+
+    // Read ADC
+    if (ADCSRA & (1 << ADIF)) {
+
+      uint16_t adcInput = ADC;
+
+      lightPeriod = (int)((float)adcInput * 4.0 / 1024.0); // Find light period
+
+      ADCSRA |= (1 << ADIF); // ADC conversion has been read
+    }
+
+    // TODO: Do light flash
+
+  } else if (tickToMS(currentTick - lastUpdateTick) >= lightPeriod) {
+    // if it's time to change the light
+    PORTB |= (1 << currentLight);           // Turn current light off
     currentLight = nextLight(currentLight); // Move to next light colour
     PORTB &= ~(1 << currentLight);          // Turn current light on
     return currentTick;
