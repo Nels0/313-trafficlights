@@ -13,12 +13,15 @@
 #include <util/delay.h>
 
 #define PRESCALE 8
+#define LED3 PB3
+#define LED4 PB4
 
 //  --FUNCTION DECLARATIONS--
 void basicLight(void);
 void basicLight2(void);
 
 void buttonUpdate(void);
+void flashUpdate(void);
 
 void cameraCheck(void);
 void speedCheck(void);
@@ -55,10 +58,10 @@ int tickToMS(int currentTick) {
 
 /* Variables:
  - ----Button states: DONE
- - Light period
+ - Light period: DONE
  - Bumper timestamps
  - red light flash time/state
- - Redlight car count for PWM
+ - Redlight car count for PWM: DONE
  - last car speed for PWM
  */
 
@@ -71,8 +74,15 @@ int redLightCount = 0;
 // Whether traffic light system is in configuration mode
 bool isConfiguring = false; // for lightUpdate
 
-int lightPeriod = 1;         // light period in s
-int lastLightUpdateTick = 0; // Last time trafic lights changed colour
+int lightPeriod = 1;              // light period in s
+uint32_t lastLightUpdateTick = 0; // Last time trafic lights changed colour
+
+// Flash function state variables
+uint32_t lastFlash_3 = 0;
+bool flash_3 = false;
+int flashCount_3 = 0;
+uint32_t lastFlash_4 = 0;
+int flashCount_4 = 0;
 
 // Switch states
 bool SW0 = false;
@@ -118,6 +128,7 @@ int main(void) {
     cameraCheck();
     speedCheck();
     lightUpdate();
+    flashUpdate();
   }
 }
 
@@ -147,6 +158,23 @@ void buttonUpdate(void) {
   LB3 |= (PORTD & (1 << PD7)) >> PD7;
 }
 
+void flashUpdate(void) {
+  // If red light camera is triggered while flashing is happening, then only 1
+  // flash cycle will happen, uninterrupted
+  if (flash_3 && tickToMS(currentTick - lastFlash_3) > 500) { // every 500ms
+    if (flashCount_3 == 2 && (PORTB & (1 << LED3))) { // end of flash cycle
+      // reset flash state
+      PORTB &= ~(1 << LED3);
+      flash_3 = false;
+      flashCount_3 = 0;
+    } else if (flashCount_3 < 2){
+      
+    }
+  }
+
+  // TODO: flashing LED4
+}
+
 void cameraCheck(void) {
   // check whether red light has been triggered
   if (LB3) {
@@ -157,18 +185,19 @@ void cameraCheck(void) {
     } else {
       // record results
       redLightCount += 1;
-      // TODO: flash light twice
+      flash_3 = true;
     }
   }
 
+  // No need to disable interrupts for 16-bit write as interrupts won't access
+  // temp high reg
 
-  // No need to disable interrupts for 16-bit write as interrupts won't access temp high reg
   // maybe
+
   // Disabling interrupts could make tick count inaccurate
-  
+
   // Set TCNT1 for PWM compare mode
   TCNT1 = (uint16_t)(redLightCount * 1024 / 100);
-
 }
 
 void speedCheck(void) {
@@ -193,8 +222,8 @@ void lightUpdate(void) { // Updates the traffic light, and
     if (SW0) { // Exit config mode on next background cycle
       isConfiguring = false;
       SW0 = false;
-      ADCSRA &=
-          ~(1 << ADFR); // Stop ADC free running mode thus stop conversions
+      // Stop ADC free running mode thus stop conversions
+      ADCSRA &= ~(1 << ADFR);
     }
 
     // Read ADC
