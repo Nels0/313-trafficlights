@@ -13,8 +13,8 @@
 #include <util/delay.h>
 
 #define PRESCALE 8
-#define LED3 PB3
-#define LED4 PB4
+#define LED3 PC2
+#define LED4 PC3
 
 //  --FUNCTION DECLARATIONS--
 void basicLight(void);
@@ -32,19 +32,32 @@ typedef enum // light colour aliases
   YELLOW = PB4,
   RED = PB3 } lightColour;
 
+// --PIN MAPPING
+/*
+  PB3 : LED0
+  PB4 : LED1
+  PB5 : LED2
+  
+  
+  PC2 : LED3
+  PC3 : LED4
+  
+  PD7 : SW0
+
+*/
 
 // --GLOBAL VARIABLES--
 
 /* Variables:
  - ----Button states: DONE
  - Light period: DONE
- - Bumper timestamps
- - red light flash time/state
+ - Bumper timestamps DONE
+ - red light flash time/state 
  - Redlight car count for PWM: DONE
- - last car speed for PWM
+ - last car speed for PWM 
  */
 
-// timestamps
+// Timestamps
 
 volatile uint32_t start = 0;
 uint32_t end = 0;
@@ -68,14 +81,14 @@ int flashCount_3 = 0;
 uint32_t lastFlash_4 = 0;
 int flashCount_4 = 0;
 
-// Switch states
+// Switch States
 bool SW0 = false;
 bool SW0_last = false;
 bool LB1 = false;
 bool LB2 = false;
 bool LB3 = false;
 
-// Global timestamp (overflows every 50 years or so)
+// Global Timestamp (overflows every 50 years or so)
 uint32_t currentTick = 0;
 
 // --HELPER FUNCTIONS--
@@ -157,13 +170,17 @@ int main(void) {
 
   // ADC Setup
   ADMUX = 0;                             // internal ref, ADC0 input
-  ADCSRA |= (1 << ADPS1) | (1 << ADPS0); // ADC input clock division factor of 8
+  ADCSRA |= (1 << ADPS1) | (1 << ADPS0) | (1 << ADEN); // ADC input clock division factor of 8
 
   // Initialise  registers as output
-  DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2) | (1 << DDB3) | (1 << DDB4) | (1<<DDB5);
+  DDRB |= (1 << DDB3) | (1 << DDB4) | (1<<DDB5);
   // Set outputs to 1 (off)
   PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
 
+  
+  DDRC |= (1 << LED3) | (1 << LED4);
+  PORTC |= (1 << LED3) | (1 << LED4);
+  
   // Timer1 PWM Setup
   TCCR1A |= (1 << COM1A1) | (0 << COM1A0); // non-inverting mode
   TCCR1A |= (1 << WGM11) | (1 << WGM10);   // Fast PWM 10-bit mode
@@ -172,7 +189,7 @@ int main(void) {
       (1 << CS11) |
       (1 << CS10); // Prescale of 64 (PWM period of 1024*64/1000000 = 65.536ms)
 
-    
+
     
   while (1) // Loop time needs to be under 10ms for red light camera
   {
@@ -187,20 +204,41 @@ int main(void) {
 }
 
 void flashUpdate(void) {
+  
+  
+  
+ // Red light camera flash
   // If red light camera is triggered while flashing is happening, then only 1
   // flash cycle will happen, uninterrupted
   if (flash_3 && tickToMS(currentTick - lastFlash_3) > 500) { // every 500ms
-    if (flashCount_3 == 2 && (PORTB & (1 << LED3))) { // end of flash cycle
+    if (flashCount_3 == 4 && (PORTB & (1 << LED3))) { // end of flash cycle
       // reset flash state
-      PORTB &= ~(1 << LED3);
+      PORTC &= ~(1 << LED3);
       flash_3 = false;
       flashCount_3 = 0;
-    } else if (flashCount_3 < 2){
-      
+
+    } else if (flashCount_3 < 4){
+      flashCount_3 += 1;
+      PORTC ^= (1 << LED3);
+      lastFlash_3 = currentTick;
     }
   }
 
-  // TODO: flashing LED4
+
+// Config mode flash
+  if (isConfiguring && currentLight == RED){
+    if (flashCount_4 < lightPeriod * 2 && tickToMS(currentTick - lastFlash_4) > 500){
+      PORTC ^= (1 << LED4);
+      lastFlash_4 = currentTick;
+      flashCount_4 += 1;
+    } else if (flashCount_4 >= lightPeriod * 2 && tickToMS(currentTick - lastFlash_4) > 3000){
+      flashCount_4 = 1;
+      PORTC &= ~(1 << LED4);
+      lastFlash_4 = currentTick;
+    }
+  } else {
+    PORTC |= (1 << LED4);
+  }
 }
 
 void cameraCheck(void) {
@@ -231,6 +269,7 @@ void cameraCheck(void) {
 void speedCheck(void) {
 	if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
 		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000; // calculate speed in km/h
+    // TODO: saturate PWM signal
 		//OCR1B = (uint16_t)(speed * 1024 / 100); // output to PWM
 		start = 0;
 		end = 0;
@@ -268,7 +307,7 @@ void lightUpdate(void) { // Updates the traffic light, and
 
       uint16_t adcInput = ADC;
 
-      lightPeriod = (int)((float)adcInput * 4.0 / 1024.0); // Find light period
+      lightPeriod = (int)((float)adcInput * 4.0 / 1024.0) + 1; // Find light period
 
       ADCSRA |= (1 << ADIF); // ADC conversion has been read
     }
