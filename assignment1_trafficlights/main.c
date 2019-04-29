@@ -212,10 +212,13 @@ void cameraCheck(void) {
 }
 
 void speedCheck(void) {
-	if ((start != 0) && (end != 0)) {
-		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000;
-		
+	if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
+		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000; // calculate speed in km/h
+		TCNT2 = (uint16_t)*(speed*1024 / 100); // output to PWM
+		start = 0;
+		end = 0;
 	}
+
   // compare timestamps
   // if both are non-zero (assume that switch can't be hit within <1ms of system
   // boot) 	calculate speed 	record speed 	output speed to PWM
