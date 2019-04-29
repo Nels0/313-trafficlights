@@ -70,6 +70,7 @@ int flashCount_4 = 0;
 
 // Switch states
 bool SW0 = false;
+bool SW0_last = false;
 bool LB1 = false;
 bool LB2 = false;
 bool LB3 = false;
@@ -102,13 +103,14 @@ uint32_t tickToMS(uint32_t tick) {
 void buttonUpdate(void) {
 
   // Switches are all connected to portD, respectively
-  //SW0 |= (PIND & (1 << PD0)) >> PD0;
-  
-  
-  if (PIND & (1 << PD7) >> PD7){
+  SW0 |= !((PIND & (1 << PD7)) >> PD7) & !SW0_last;
+  if (SW0){
     PORTB &= ~(1 << PB5);
-    SW0 = true;
-  }
+  } else {
+    PORTB |= (1<<PB5);
+  }  
+  
+  SW0_last = !((PIND & (1 << PD7)) >> PD7);
 
   // LB1, 2, 3 represent SW5, 6, 7 respectively
   /*LB1 |= (PORTD & (1 << PD5)) >> PD5;
@@ -166,7 +168,6 @@ int main(void) {
     // Camera check comes before lightUpdate so that it if a car drives through
     // on the same tick as the light changes from red, it will read what the
     // light was when it was triggered
-
     cameraCheck();
     speedCheck();
     lightUpdate();
@@ -229,22 +230,25 @@ void speedCheck(void) {
 
 void lightUpdate(void) { // Updates the traffic light, and
                          // configuration of them
+  
+  if(SW0){
+    if(isConfiguring && currentLight == RED){
+       isConfiguring = false;
 
-  if (SW0 && !isConfiguring) { // Enter config mode on next background cycle &
-                               // red light
-    isConfiguring = true;
+       // Stop ADC free running mode thus stop conversions
+       ADCSRA &= ~(1 << ADFR);
+    } else {
+       // red light
+       isConfiguring = true;
+
+       ADCSRA |= (1 << ADFR) |
+       (1 << ADSC); // Set ADC to free running and start conversions
+    }
     SW0 = false;
-    ADCSRA |= (1 << ADFR) |
-              (1 << ADSC); // Set ADC to free running and start conversions
   }
+  
 
   if (isConfiguring && currentLight == RED) {
-    if (SW0) { // Exit config mode on next background cycle
-      isConfiguring = false;
-      SW0 = false;
-      // Stop ADC free running mode thus stop conversions
-      ADCSRA &= ~(1 << ADFR);
-    }
 
     // Read ADC
     if (ADCSRA & (1 << ADIF)) {
@@ -265,4 +269,5 @@ void lightUpdate(void) { // Updates the traffic light, and
     PORTB &= ~(1 << currentLight);          // Turn current light on
     lastLightUpdateTick = currentTick;     //reset
   }
+  
 }
