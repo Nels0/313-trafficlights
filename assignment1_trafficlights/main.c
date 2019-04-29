@@ -99,6 +99,24 @@ uint32_t tickToMS(uint32_t tick) {
   return (largetick / 1000);
 }
 
+void buttonUpdate(void) {
+
+  // Switches are all connected to portD, respectively
+  //SW0 |= (PIND & (1 << PD0)) >> PD0;
+  
+  
+  if (PIND & (1 << PD7) >> PD7){
+    PORTB &= ~(1 << PB5);
+    SW0 = true;
+  }
+
+  // LB1, 2, 3 represent SW5, 6, 7 respectively
+  /*LB1 |= (PORTD & (1 << PD5)) >> PD5;
+  LB2 |= (PORTD & (1 << PD6)) >> PD6;
+  LB3 |= (PORTD & (1 << PD7)) >> PD7;
+  */
+}
+
 ISR(TIMER0_OVF_vect) { // fires every overflow of timer1 (every 2.048ms)
 
   buttonUpdate();
@@ -156,19 +174,6 @@ int main(void) {
   }
 }
 
-
-
-void buttonUpdate(void) {
-
-  // Switches are all connected to portD, respectively
-  SW0 |= (PORTD & (1 << PD0)) >> PD0;
-
-  // LB1, 2, 3 represent SW5, 6, 7 respectively
-  LB1 |= (PORTD & (1 << PD5)) >> PD5;
-  LB2 |= (PORTD & (1 << PD6)) >> PD6;
-  LB3 |= (PORTD & (1 << PD7)) >> PD7;
-}
-
 void flashUpdate(void) {
   // If red light camera is triggered while flashing is happening, then only 1
   // flash cycle will happen, uninterrupted
@@ -212,13 +217,10 @@ void cameraCheck(void) {
 }
 
 void speedCheck(void) {
-	if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
-		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000; // calculate speed in km/h
-		TCNT2 = (uint16_t)*(speed*1024 / 100); // output to PWM
-		start = 0;
-		end = 0;
+	if ((start != 0) && (end != 0)) {
+		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000;
+		
 	}
-
   // compare timestamps
   // if both are non-zero (assume that switch can't be hit within <1ms of system
   // boot) 	calculate speed 	record speed 	output speed to PWM
