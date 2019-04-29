@@ -28,9 +28,9 @@ void speedCheck(void);
 void lightUpdate(void);
 
 typedef enum // light colour aliases
-{ GREEN = PB2,
-  YELLOW = PB3,
-  RED = PB0 } lightColour;
+{ GREEN = PB5,
+  YELLOW = PB4,
+  RED = PB3 } lightColour;
 
 
 // --GLOBAL VARIABLES--
@@ -104,11 +104,6 @@ void buttonUpdate(void) {
 
   // Switches are all connected to portD, respectively
   SW0 |= !((PIND & (1 << PD7)) >> PD7) & !SW0_last;
-  if (SW0){
-    PORTB &= ~(1 << PB5);
-  } else {
-    PORTB |= (1<<PB5);
-  }  
   
   SW0_last = !((PIND & (1 << PD7)) >> PD7);
 
@@ -147,7 +142,6 @@ ISR(INT1_vect) {
 
 }
 
-ISR(TIMER0_OVF_vect)
 
 int main(void) {
 
@@ -166,9 +160,9 @@ int main(void) {
   ADCSRA |= (1 << ADPS1) | (1 << ADPS0); // ADC input clock division factor of 8
 
   // Initialise  registers as output
-  DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2) | (1 << DDB3) | (1<<DDB5);
+  DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2) | (1 << DDB3) | (1 << DDB4) | (1<<DDB5);
   // Set outputs to 1 (off)
-  PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED) | (1 << PB5);
+  PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
 
   // Timer1 PWM Setup
   TCCR1A |= (1 << COM1A1) | (0 << COM1A0); // non-inverting mode
@@ -178,10 +172,6 @@ int main(void) {
       (1 << CS11) |
       (1 << CS10); // Prescale of 64 (PWM period of 1024*64/1000000 = 65.536ms)
 
-  // Timer 2 PWM Set-Up
-    TCCR2 |= (1 << WGM21) | (1 << WGM20);
-    TCCR2 |= (1 << COM21);
-    TCCR2 |= (1 << CS22);
     
     
   while (1) // Loop time needs to be under 10ms for red light camera
@@ -189,6 +179,7 @@ int main(void) {
     // Camera check comes before lightUpdate so that it if a car drives through
     // on the same tick as the light changes from red, it will read what the
     // light was when it was triggered
+    OCR1B = 512;
     cameraCheck();
     lightUpdate();
     flashUpdate();
@@ -234,13 +225,13 @@ void cameraCheck(void) {
   // Disabling interrupts could make tick count inaccurate
 
   // Set TCNT1 for PWM compare mode
-  OCR1 = (uint16_t)(redLightCount * 1024 / 100);
+  //OCR1 = (uint16_t)(redLightCount * 1024 / 100);
 }
 
 void speedCheck(void) {
 	if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
 		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000; // calculate speed in km/h
-		OCR2 = (uint16_t)*(speed * 1024 / 100); // output to PWM
+		//OCR1B = (uint16_t)(speed * 1024 / 100); // output to PWM
 		start = 0;
 		end = 0;
 	}
