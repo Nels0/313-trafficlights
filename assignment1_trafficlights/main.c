@@ -137,7 +137,22 @@ ISR(TIMER0_OVF_vect) { // fires every overflow of timer1 (every 2.048ms)
   
 }
 
+ISR(INT0_vect) {
+  start = currentTick;
+}
+
+ISR(INT1_vect) {
+  end = currentTick;
+  speedCheck();
+
+}
+
+ISR(TIMER0_OVF_vect)
+
 int main(void) {
+
+  MCUCR |= (1 << ISC11); // set INT1 falling edge interrupt
+  MCUCR |= (1 << ISC01); // set INT0 falling edge interrupt
 
   TCCR0 = 0;
   TCCR0 |= (1 << CS01);  // Set prescaler for timer0 to 8, overflow of
@@ -163,13 +178,18 @@ int main(void) {
       (1 << CS11) |
       (1 << CS10); // Prescale of 64 (PWM period of 1024*64/1000000 = 65.536ms)
 
+  // Timer 2 PWM Set-Up
+    TCCR2 |= (1 << WGM21) | (1 << WGM20);
+    TCCR2 |= (1 << COM21);
+    TCCR2 |= (1 << CS22);
+    
+    
   while (1) // Loop time needs to be under 10ms for red light camera
   {
     // Camera check comes before lightUpdate so that it if a car drives through
     // on the same tick as the light changes from red, it will read what the
     // light was when it was triggered
     cameraCheck();
-    speedCheck();
     lightUpdate();
     flashUpdate();
   }
@@ -214,13 +234,15 @@ void cameraCheck(void) {
   // Disabling interrupts could make tick count inaccurate
 
   // Set TCNT1 for PWM compare mode
-  TCNT1 = (uint16_t)(redLightCount * 1024 / 100);
+  OCR1 = (uint16_t)(redLightCount * 1024 / 100);
 }
 
 void speedCheck(void) {
-	if ((start != 0) && (end != 0)) {
-		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000;
-		
+	if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
+		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000; // calculate speed in km/h
+		OCR2 = (uint16_t)*(speed * 1024 / 100); // output to PWM
+		start = 0;
+		end = 0;
 	}
   // compare timestamps
   // if both are non-zero (assume that switch can't be hit within <1ms of system
