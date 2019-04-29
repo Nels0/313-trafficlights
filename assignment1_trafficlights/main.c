@@ -29,30 +29,9 @@ void lightUpdate(void);
 
 typedef enum // light colour aliases
 { GREEN = PB2,
-  YELLOW = PB1,
+  YELLOW = PB3,
   RED = PB0 } lightColour;
 
-// --HELPER FUNCTIONS--
-
-lightColour nextLight(lightColour lightIn) // helper function to cycle through
-                                           // lights in the right order
-{
-  switch (lightIn) {
-  case GREEN:
-    return YELLOW;
-  case YELLOW:
-    return RED;
-  case RED:
-    return GREEN;
-  default:
-    return GREEN;
-  }
-}
-
-int tickToMS(int currentTick) {
-  float ratio = 256.0 * (float)PRESCALE / (float)F_CPU;
-  return (int)((float)currentTick * ratio);
-}
 
 // --GLOBAL VARIABLES--
 
@@ -65,6 +44,11 @@ int tickToMS(int currentTick) {
  - last car speed for PWM
  */
 
+// timestamps
+
+volatile uint32_t start = 0;
+uint32_t end = 0;
+
 // Global current light color
 lightColour currentLight = RED; // LEDs should always be updated when this is
                                 // changed. Should always be accurate
@@ -75,7 +59,7 @@ int redLightCount = 0;
 bool isConfiguring = false; // for lightUpdate
 
 int lightPeriod = 1;              // light period in s
-uint32_t lastLightUpdateTick = 0; // Last time trafic lights changed colour
+uint32_t lastLightUpdateTick = 0; // Last time traffic lights changed colour
 
 // Flash function state variables
 uint32_t lastFlash_3 = 0;
@@ -93,6 +77,46 @@ bool LB3 = false;
 // Global timestamp (overflows every 50 years or so)
 uint32_t currentTick = 0;
 
+// --HELPER FUNCTIONS--
+
+lightColour nextLight(lightColour lightIn) // helper function to cycle through
+// lights in the right order
+{
+  switch (lightIn) {
+    case GREEN:
+    return YELLOW;
+    case YELLOW:
+    return RED;
+    case RED:
+    return GREEN;
+    default:
+    return GREEN;
+  }
+}
+
+uint32_t tickToMS(uint32_t tick) {
+  uint32_t largetick = tick * 256 * 8;
+  return (largetick / 1000);
+}
+
+ISR(TIMER0_OVF_vect) { // fires every overflow of timer1 (every 2.048ms)
+
+  buttonUpdate();
+  currentTick = currentTick + 1;
+
+  // TODO: speed measuring
+  /* button1 pressed:
+      record timestamp
+      reset button bool
+     button2 pressed:
+      record timestamp
+      calculate speed
+      output to PWM (use PWM setter function?)
+      reset button bool
+  */
+  
+}
+
 int main(void) {
 
   TCCR0 = 0;
@@ -107,9 +131,9 @@ int main(void) {
   ADCSRA |= (1 << ADPS1) | (1 << ADPS0); // ADC input clock division factor of 8
 
   // Initialise  registers as output
-  DDRB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
+  DDRB |= (1 << DDB0) | (1 << DDB1) | (1 << DDB2) | (1 << DDB3) | (1<<DDB5);
   // Set outputs to 1 (off)
-  PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
+  PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED) | (1 << PB5);
 
   // Timer1 PWM Setup
   TCCR1A |= (1 << COM1A1) | (0 << COM1A0); // non-inverting mode
@@ -132,20 +156,7 @@ int main(void) {
   }
 }
 
-ISR(TIMER0_OVF_vect) { // fires every overflow of timer1 (every 2.048ms)
-  buttonUpdate();
-  currentTick += 1;
-  // TODO: speed measuring
-  /* button1 pressed:
-      record timestamp
-      reset button bool
-     button2 pressed:
-      record timestamp
-      calculate speed
-      output to PWM (use PWM setter function?)
-      reset button bool
-  */
-}
+
 
 void buttonUpdate(void) {
 
@@ -201,6 +212,10 @@ void cameraCheck(void) {
 }
 
 void speedCheck(void) {
+	if ((start != 0) && (end != 0)) {
+		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000;
+		
+	}
   // compare timestamps
   // if both are non-zero (assume that switch can't be hit within <1ms of system
   // boot) 	calculate speed 	record speed 	output speed to PWM
@@ -238,11 +253,11 @@ void lightUpdate(void) { // Updates the traffic light, and
 
     // TODO: Do light flash
 
-  } else if (tickToMS(currentTick - lastLightUpdateTick) >= lightPeriod) {
+  } else if (tickToMS(currentTick - lastLightUpdateTick) >= (lightPeriod * 1000)) {
     // if it's time to change the light
     PORTB |= (1 << currentLight);           // Turn current light off
     currentLight = nextLight(currentLight); // Move to next light colour
     PORTB &= ~(1 << currentLight);          // Turn current light on
-    lastLightUpdateTick = tickToMS(currentTick - lastLightUpdateTick);
+    lastLightUpdateTick = currentTick;     //reset
   }
 }
