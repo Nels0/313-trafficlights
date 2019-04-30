@@ -34,15 +34,22 @@ typedef enum // light colour aliases
 
 // --PIN MAPPING
 /*
-  PB3 : LED0
-  PB4 : LED1
-  PB5 : LED2
+  PB1 : PWM1 : Redlight count
+  PB2 : PWM2 : Last speed
+  PB3 : LED0 : Red light
+  PB4 : LED1 : Yellow light
+  PB5 : LED2 : Green light
   
+  PC0 : POT1 : Period select
+  PC2 : LED3 : Red light flash
+  PC3 : LED4 : Configmode flash
+  PC6 : speed timing pin
+
   
-  PC2 : LED3
-  PC3 : LED4
-  
-  PD7 : SW0
+  PD2 : SW5 : LB1
+  PD3 : SW6 : LB2
+  PD4 : SW7 : LB3
+  PD7 : SW0 : Config switch
 
 */
 
@@ -59,7 +66,7 @@ typedef enum // light colour aliases
 
 // Timestamps
 
-volatile uint32_t start = 0;
+uint32_t start = 0;
 uint32_t end = 0;
 
 // Global current light color
@@ -84,9 +91,8 @@ int flashCount_4 = 0;
 // Switch States
 bool SW0 = false;
 bool SW0_last = false;
-bool LB1 = false;
-bool LB2 = false;
 bool LB3 = false;
+bool LB3_last = false;
 
 // Global Timestamp (overflows every 50 years or so)
 uint32_t currentTick = 0;
@@ -115,49 +121,35 @@ uint32_t tickToMS(uint32_t tick) {
 
 void buttonUpdate(void) {
 
-  // Switches are all connected to portD, respectively
+
   SW0 |= !((PIND & (1 << PD7)) >> PD7) & !SW0_last;
-  
   SW0_last = !((PIND & (1 << PD7)) >> PD7);
 
-  // LB1, 2, 3 represent SW5, 6, 7 respectively
-  /*LB1 |= (PORTD & (1 << PD5)) >> PD5;
-  LB2 |= (PORTD & (1 << PD6)) >> PD6;
-  LB3 |= (PORTD & (1 << PD7)) >> PD7;
-  */
+  LB3 |= !((PIND & (1 << PD4)) >> PD4) & !LB3_last;
+  LB3_last = !((PIND & (1 << PD4)) >> PD4);
 }
 
 ISR(TIMER0_OVF_vect) { // fires every overflow of timer1 (every 2.048ms)
 
   buttonUpdate();
   currentTick = currentTick + 1;
-
-  // TODO: speed measuring
-  /* button1 pressed:
-      record timestamp
-      reset button bool
-     button2 pressed:
-      record timestamp
-      calculate speed
-      output to PWM (use PWM setter function?)
-      reset button bool
-  */
   
 }
 
 ISR(INT0_vect) {
   start = currentTick;
+  PORTC &= ~(1 << PC4);
 }
 
 ISR(INT1_vect) {
   end = currentTick;
-  speedCheck();
-
+  PORTC |= (1 << PC4);
 }
 
 
 int main(void) {
 
+  GICR |= (1 << INT0) | (1 << INT1); // Enable external interrupts
   MCUCR |= (1 << ISC11); // set INT1 falling edge interrupt
   MCUCR |= (1 << ISC01); // set INT0 falling edge interrupt
 
@@ -173,21 +165,24 @@ int main(void) {
   ADCSRA |= (1 << ADPS1) | (1 << ADPS0) | (1 << ADEN); // ADC input clock division factor of 8
 
   // Initialise  registers as output
-  DDRB |= (1 << DDB3) | (1 << DDB4) | (1<<DDB5);
+  DDRB |= UINT8_MAX;
   // Set outputs to 1 (off)
   PORTB |= (1 << GREEN) | (1 << YELLOW) | (1 << RED);
 
   
-  DDRC |= (1 << LED3) | (1 << LED4);
+  DDRC |= (1 << DDC2) | (1 << DDC3) | (1 << DDC4);
   PORTC |= (1 << LED3) | (1 << LED4);
   
   // Timer1 PWM Setup
-  TCCR1A |= (1 << COM1A1) | (0 << COM1A0); // non-inverting mode
-  TCCR1A |= (1 << WGM11) | (1 << WGM10);   // Fast PWM 10-bit mode
-  TCCR1B |= (1 << WGM12);                  // Fast PWM 10-bit mode
-  TCCR1B |=
-      (1 << CS11) |
-      (1 << CS10); // Prescale of 64 (PWM period of 1024*64/1000000 = 65.536ms)
+  TCCR1A |= (1 << COM1A1) | (1 << COM1B1); // non-inverting mode
+  TCCR1A |= (1 << WGM10) | (1 << WGM11);   // Fast PWM 10-bit mode
+  TCCR1B |= (1 << WGM12);                 // Fast PWM 10-bit mode
+  // Prescale of 64 (PWM period of 1024*64/1000000 = 65.54ms)
+  TCCR1B |= (1 << CS11) | (1 << CS10); 
+  
+  //Set PWM outputs to "zero"
+  OCR1A = 0;
+  OCR1B = 0;
 
 
     
@@ -196,10 +191,11 @@ int main(void) {
     // Camera check comes before lightUpdate so that it if a car drives through
     // on the same tick as the light changes from red, it will read what the
     // light was when it was triggered
-    OCR1B = 512;
+
     cameraCheck();
     lightUpdate();
     flashUpdate();
+    speedCheck(); // called outside interrupt so it won't interrupt 16-bit write
   }
 }
 
@@ -210,14 +206,13 @@ void flashUpdate(void) {
  // Red light camera flash
   // If red light camera is triggered while flashing is happening, then only 1
   // flash cycle will happen, uninterrupted
+  
   if (flash_3 && tickToMS(currentTick - lastFlash_3) > 500) { // every 500ms
-    if (flashCount_3 == 4 && (PORTB & (1 << LED3))) { // end of flash cycle
+    if (flashCount_3 == 4) { // end of flash cycle
       // reset flash state
-      PORTC &= ~(1 << LED3);
       flash_3 = false;
       flashCount_3 = 0;
-
-    } else if (flashCount_3 < 4){
+    } else if (flashCount_3 < 4){ // Continue flash cycle
       flashCount_3 += 1;
       PORTC ^= (1 << LED3);
       lastFlash_3 = currentTick;
@@ -257,27 +252,30 @@ void cameraCheck(void) {
 
   // No need to disable interrupts for 16-bit write as interrupts won't access
   // temp high reg
-
-  // maybe
-
   // Disabling interrupts could make tick count inaccurate
-
-  // Set TCNT1 for PWM compare mode
-  //OCR1 = (uint16_t)(redLightCount * 1024 / 100);
+  
+  // Set PWM1 output
+  OCR1A = (uint16_t)(redLightCount * 1024 / 100);
 }
 
 void speedCheck(void) {
+
 	if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
-		volatile uint32_t speed = 20/tickToMS(end - start)*3.6*1000; // calculate speed in km/h
-    // TODO: saturate PWM signal
-		//OCR1B = (uint16_t)(speed * 1024 / 100); // output to PWM
+		int32_t speed = 20 * 3.6 * 1000 / tickToMS(end - start); // calculate speed in km/h
+    
+    // TODO: make this more proper, i.e get to 100% duty cycle properly, handle overflows
+    if (speed > 100){
+      speed = 99;
+    } else if (speed < 0){ // Occurs when int overflows because speed is too high
+      speed = 99;
+    }
+
+		OCR1B = (uint16_t)(speed * 1024 / 100); // output to PWM
+
+    
 		start = 0;
 		end = 0;
 	}
-  // compare timestamps
-  // if both are non-zero (assume that switch can't be hit within <1ms of system
-  // boot) 	calculate speed 	record speed 	output speed to PWM
-  // set timestamps back to zero when finished
 }
 
 void lightUpdate(void) { // Updates the traffic light, and
@@ -293,8 +291,7 @@ void lightUpdate(void) { // Updates the traffic light, and
        // red light
        isConfiguring = true;
 
-       ADCSRA |= (1 << ADFR) |
-       (1 << ADSC); // Set ADC to free running and start conversions
+       ADCSRA |= (1 << ADFR) | (1 << ADSC); // Set ADC to free running and start conversions
     }
     SW0 = false;
   }
@@ -302,7 +299,7 @@ void lightUpdate(void) { // Updates the traffic light, and
 
   if (isConfiguring && currentLight == RED) {
 
-    // Read ADC
+    // Read ADC if conversion finished
     if (ADCSRA & (1 << ADIF)) {
 
       uint16_t adcInput = ADC;
@@ -312,7 +309,6 @@ void lightUpdate(void) { // Updates the traffic light, and
       ADCSRA |= (1 << ADIF); // ADC conversion has been read
     }
 
-    // TODO: Do light flash
 
   } else if (tickToMS(currentTick - lastLightUpdateTick) >= (lightPeriod * 1000)) {
     // if it's time to change the light
