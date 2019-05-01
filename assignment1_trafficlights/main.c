@@ -163,6 +163,7 @@ int main(void) {
   OCR1A = 0;
   OCR1B = 0;
 
+  // Main loop
   while (1) // Loop time needs to be under 10ms for red light camera
   {
     // Camera check comes before lightUpdate so that it if a car drives through
@@ -177,6 +178,7 @@ int main(void) {
 }
 
 void flashUpdate(void) {
+  // Update flasher states
 
   // Red light camera flash
   // If red light camera is triggered while flashing is happening, then only 1
@@ -195,9 +197,9 @@ void flashUpdate(void) {
   }
 
   // Config mode flash
-  if (isConfiguring && currentLight == RED) { // Flashed=s while in active config mode
+  if (isConfiguring && currentLight == RED) { // Flashes while in active config mode
     if (flashCount_4 < lightPeriod * 2 && tickToMS(currentTick - lastFlash_4) > 500) { // every 0.5s
-      PORTC ^= (1 << LED4); // Toggle light
+      PORTC ^= (1 << LED4);                                                            // Toggle light
       lastFlash_4 = currentTick;
       flashCount_4 += 1;
     } else if (flashCount_4 >= lightPeriod * 2 && tickToMS(currentTick - lastFlash_4) > 3000) { // wait 3 seconds
@@ -213,7 +215,7 @@ void flashUpdate(void) {
 void cameraCheck(void) {
   // check whether red light has been triggered
   if (LB3) {
-    LB3 = false;
+    LB3 = false; // result has been processed
     // check current traffic light colour
     if (currentLight != RED) {
       return;
@@ -222,10 +224,10 @@ void cameraCheck(void) {
       redLightCount += 1;
       flash_3 = true;
     }
-  }
-
-  if (redLightCount > 100){
-    redLightCount = 100;
+    // Clamping value to 100% Duty Cycle
+    if (redLightCount > 100) {
+      redLightCount = 100;
+    }
   }
 
   // No need to disable interrupts for 16-bit write as interrupts won't access temp high reg
@@ -235,31 +237,33 @@ void cameraCheck(void) {
 }
 
 void speedCheck(void) {
+  // When both barriers have been triggered, perform calculations and output
 
-  if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
+  if ((start != 0) && (end != 0) && end > start) { // check if both buttons have been triggered
 
     uint32_t speed = 20 * 3.6 * 1000 / tickToMS(end - start); // calculate speed in km/h
 
+    // Clamp speed to 100% DC
     if (speed > 100) {
       speed = 100;
-    } 
-    
+    }
+
     OCR1B = (uint16_t)(speed * 1024 / 100) - 1; // output to PWM2
 
-
-    //reset values
+    // reset values
     start = 0;
     end = 0;
   }
 }
 
-void lightUpdate(void) { // Updates the traffic light, and configuration of them
+void lightUpdate(void) {
+  // Updates the traffic light, and configuration of them
 
   if (SW0) {
     if (isConfiguring && currentLight == RED) { // Exit config mode
       isConfiguring = false;
-      ADCSRA &= ~(1 << ADFR);// Stop ADC free running mode thus stop conversions
-    } else {   // Enter config mode
+      ADCSRA &= ~(1 << ADFR); // Stop ADC free running mode thus stop conversions
+    } else {                  // Enter config mode
       isConfiguring = true;
       ADCSRA |= (1 << ADFR) | (1 << ADSC); // Set ADC to free running and start conversions
     }
