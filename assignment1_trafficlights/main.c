@@ -170,9 +170,9 @@ int main(void) {
     // light was when it was triggered
 
     cameraCheck();
-    lightUpdate();
     flashUpdate();
-    speedCheck(); // called outside interrupt so it won't interrupt 16-bit write
+    speedCheck(); // called outside interrupt so it won't interrupt other 16-bit write
+    lightUpdate();
   }
 }
 
