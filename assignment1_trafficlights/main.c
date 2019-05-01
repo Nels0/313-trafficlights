@@ -38,7 +38,7 @@ typedef enum // light colour aliases
   PC0 : POT1 : Period select
   PC2 : LED3 : Red light flash
   PC3 : LED4 : Configmode flash
-  PC6 : speed timing pin
+  PC4 : speed timing pin
 
   PD2 : SW5 : LB1
   PD3 : SW6 : LB2
@@ -224,27 +224,28 @@ void cameraCheck(void) {
     }
   }
 
+  if (redLightCount > 100){
+    redLightCount = 100;
+  }
+
   // No need to disable interrupts for 16-bit write as interrupts won't access temp high reg
   // Disabling interrupts could make tick count inaccurate
 
-  OCR1A = (uint16_t)(redLightCount * 1024 / 100); // output to PWM1
+  OCR1A = (uint16_t)(redLightCount * 1024 / 100) - 1; // output to PWM1
 }
 
 void speedCheck(void) {
 
   if ((start != 0) && (end != 0)) { // check if both buttons have been triggered
 
-    int32_t speed = 20 * 3.6 * 1000 / tickToMS(end - start); // calculate speed in km/h
+    uint32_t speed = 20 * 3.6 * 1000 / tickToMS(end - start); // calculate speed in km/h
 
-    // TODO: make this more proper, i.e get to 100% duty cycle properly, handle
-    // overflows
     if (speed > 100) {
-      speed = 99;
-    } else if (speed < 0) { // Occurs when int overflows because speed is too high
-      speed = 99;
-    }
+      speed = 100;
+    } 
+    
+    OCR1B = (uint16_t)(speed * 1024 / 100) - 1; // output to PWM2
 
-    OCR1B = (uint16_t)(speed * 1024 / 100); // output to PWM2
 
     //reset values
     start = 0;
