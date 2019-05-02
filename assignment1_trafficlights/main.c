@@ -53,7 +53,7 @@ typedef enum // light colour aliases
 uint32_t start = 0;
 uint32_t end = 0;
 
-int redLightCount = 0;
+uint32_t redLightCount = 0; // large type to avoid overflow when converting to PWM output
 
 // Global current light color
 lightColour currentLight = RED; // LEDs should always be updated when this is
